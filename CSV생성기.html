@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Marker CSV 생성기</title>
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5c0fbe9d0e6e2173236a0a95c88336a4&libraries=services"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin: auto;
+        }
+        h2 {
+            text-align: center;
+            color: #000000;
+        }
+        input {
+            width: calc(100% - 60px);
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+            font-size: 14px;
+        }
+        .input-container {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border-radius: 25px;
+            padding: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .btn {
+            padding: 8px;
+            background: #3d5afe;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            flex-shrink: 0;
+            margin-left: 5px;
+        }
+        .btn:disabled {
+            background: #aaa;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+            margin: auto;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background: #3d5afe;
+            color: white;
+        }
+        .download-btn {
+            width: 100%;
+            background: #ff5722;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🧭 Map Marker CSV 생성기</h2>
+        <label for="folderName" style="font-weight: bold; font-size: larger;">📂 Folder Name</label>
+        <input type="text" id="folderName" placeholder="Folder Name 입력"><br>
+
+        <label for="title" style="font-weight: bold; font-size: larger;">📌 Title</label>
+        <input type="text" id="title" placeholder="Title 입력"><br>
+
+        <label for="address" style="font-weight: bold; font-size: larger;">🗺 주소</label>
+        <div class="input-container">
+            <input type="text" id="address" placeholder="주소 입력"><br>
+            <button class="btn" onclick="addData()">추가</button>
+        </div>
+
+        <h3>📜 입력된 데이터</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>삭제</th>
+                </tr>
+            </thead>
+            <tbody id="dataList"></tbody>
+        </table>
+
+        <button class="btn download-btn" onclick="downloadCSV()">CSV 저장</button>
+
+        <h3>📂 엑셀.xlsx → 엑셀.CSV 변환</h3>
+        <input type="file" id="csvExcelFile" accept=".xlsx">
+        <button class="btn" onclick="convertExcelToCSV()">CSV 변환</button>
+    </div>
+
+    <script>
+        let data = [];
+        let folderName = "";
+
+        function addData() {
+            if (!folderName) {
+                let inputFolderName = document.getElementById("folderName").value.trim();
+                if (!inputFolderName) {
+                    alert("📂 Folder Name을 입력하세요.");
+                    return;
+                }
+                folderName = inputFolderName;
+                document.getElementById("folderName").disabled = true;
+                alert("✅ Folder Name 저장됨: " + folderName);
+            }
+
+            let title = document.getElementById("title").value.trim();
+            let address = document.getElementById("address").value.trim();
+            if (!title || !address) {
+                alert("📌 Title과 주소를 입력하세요.");
+                return;
+            }
+
+            // 중복 Title 검사
+            let existingTitles = data.map(item => item[4]);
+            if (existingTitles.includes(title)) {
+                alert("❌ 이미 존재하는 Title입니다!");
+                return;
+            }
+
+            let geocoder = new kakao.maps.services.Geocoder();
+            geocoder.addressSearch(address, function(result, status) {
+                if (status === kakao.maps.services.Status.OK && result.length > 0) {
+                    let latitude = result[0].y;
+                    let longitude = result[0].x;
+                    saveData(folderName, latitude, longitude, title);
+                } else {
+                    alert("❌ 주소 변환 실패! 올바른 주소를 입력하세요.");
+                }
+            });
+        }
+
+        function saveData(folder, lat, lng, title) {
+            let rowData = [folder, "ffeb3b", lat, lng, title, "", "ffeb3b", "", new Date().toISOString(), 443];
+            data.push(rowData);
+            updateDataList();
+        }
+
+        function updateDataList() {
+            let dataList = document.getElementById("dataList");
+            dataList.innerHTML = data.map((item, index) => `
+                <tr>
+                    <td>${item[4]}</td>
+                    <td><button class="btn" onclick="removeData(${index})">❌</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function removeData(index) {
+            data.splice(index, 1);
+            updateDataList();
+        }
+
+        function downloadCSV() {
+            if (data.length === 0) {
+                alert("📂 저장할 데이터가 없습니다.");
+                return;
+            }
+            let csvContent = "Folder name,Folder color,Latitude,Longitude,Title,Description,Color,Phone number,Timestamp,Pin icon code\n";
+            csvContent += data.map(e => e.join(",")).join("\n");
+            let blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+            let link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "output.csv";
+            link.click();
+        }
+
+        function convertExcelToCSV() {
+            let fileInput = document.getElementById("csvExcelFile");
+            if (!fileInput.files.length) {
+                alert("📂 업로드할 엑셀 파일을 선택하세요.");
+                return;
+            }
+
+            let reader = new FileReader();
+            reader.onload = function (e) {
+                let data = new Uint8Array(e.target.result);
+                let workbook = XLSX.read(data, { type: "array" });
+                let sheet = workbook.Sheets[workbook.SheetNames[0]];
+                let csv = XLSX.utils.sheet_to_csv(sheet, { FS: "," });
+
+                let blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+                let link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "converted.csv";
+                link.click();
+            };
+            reader.readAsArrayBuffer(fileInput.files[0]);
+        }
+    </script>
+</body>
+</html>
